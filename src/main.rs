@@ -1,4 +1,4 @@
-use avian2d::{math::Scalar, prelude::*};
+use avian2d::prelude::*;
 use bevy::{app::PluginGroupBuilder, log::LogPlugin, prelude::*};
 
 fn main() {
@@ -88,7 +88,7 @@ fn player_input(
         .single()
         .expect("there should never be multiple player entities");
     let mut velocity = Vec2::ZERO;
-    let mut angle = 0.0;
+    let mut angle: f32 = 0.0;
 
     if keyboard.pressed(KeyCode::KeyA) {
         velocity.x -= 1.0;
@@ -115,7 +115,7 @@ fn player_input(
         angle += 1.0;
     }
 
-    let angle = (angle as Scalar).to_radians() * player.rotation_speed;
+    let angle = angle.to_radians() * player.rotation_speed;
     character_movements.write(CharacterMovement::rotation(player_entity, angle));
 }
 
@@ -126,7 +126,7 @@ struct Character;
 
 enum MovementType {
     Translation(Vec2),
-    Rotation(Scalar),
+    Rotation(f32),
 }
 
 #[derive(Message)]
@@ -143,7 +143,7 @@ impl CharacterMovement {
         }
     }
 
-    fn rotation(entity: Entity, angle: Scalar) -> Self {
+    fn rotation(entity: Entity, angle: f32) -> Self {
         Self {
             entity,
             movement_type: MovementType::Rotation(angle),
