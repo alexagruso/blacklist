@@ -1,13 +1,19 @@
+#![allow(dead_code)]
+
 use avian2d::prelude::*;
 use bevy::{app::PluginGroupBuilder, log::LogPlugin, prelude::*};
+
+use blacklist::character::{Character, CharacterControllerPlugin, CharacterMovement};
+#[cfg(debug_assertions)]
+use blacklist::debug::GameDebugPlugins;
 
 fn main() {
     App::new()
         // TODO: at some point I'd like to remove the default plugin group and manually add all necessary plugins.
         .add_plugins(DefaultPlugins.build().disable::<LogPlugin>())
         .add_plugins((
-            // TODO: figure out whether another value would be ideal
-            PhysicsPlugins::default().with_length_unit(20.0),
+            // Most character entities (player, enemies, etc) are about 100 units in size, so we use 100 units per meter for physics
+            PhysicsPlugins::default().with_length_unit(100.0),
             #[cfg(debug_assertions)]
             PhysicsDebugPlugin,
         ))
@@ -34,7 +40,7 @@ struct SpawnPlugin;
 
 impl Plugin for SpawnPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, (spawn_camera, spawn_player));
+        app.add_systems(Startup, (spawn_camera, spawn_player, spawn_obstacles));
     }
 }
 
@@ -51,8 +57,27 @@ fn spawn_player(
         Player::default(),
         Character,
         RigidBody::Kinematic,
+        Collider::rectangle(50.0, 50.0),
         Mesh2d(meshes.add(Rectangle::new(50.0, 50.0))),
         MeshMaterial2d(materials.add(Color::srgb(0.25, 0.9, 0.35))),
+    ));
+}
+
+#[derive(Component)]
+struct Obstacle;
+
+fn spawn_obstacles(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    commands.spawn((
+        Obstacle,
+        Collider::rectangle(100.0, 500.0),
+        Transform::from_translation(vec2(250.0, 0.0).extend(0.0))
+            .with_rotation(Quat::from_rotation_z(15.0f32.to_radians())),
+        Mesh2d(meshes.add(Rectangle::new(100.0, 500.0))),
+        MeshMaterial2d(materials.add(Color::srgb(0.1, 0.4, 0.3))),
     ));
 }
 
@@ -109,138 +134,12 @@ fn player_input(
     character_movements.write(CharacterMovement::translation(player_entity, velocity));
 
     if keyboard.pressed(KeyCode::KeyQ) {
-        angle -= 1.0;
+        angle += 1.0;
     }
     if keyboard.pressed(KeyCode::KeyE) {
-        angle += 1.0;
+        angle -= 1.0;
     }
 
     let angle = angle.to_radians() * player.rotation_speed;
     character_movements.write(CharacterMovement::rotation(player_entity, angle));
-}
-
-/// Marker for any entity that responds to character controller messages
-#[derive(Component)]
-#[require(Transform, LinearVelocity, AngularVelocity)]
-struct Character;
-
-enum MovementType {
-    Translation(Vec2),
-    Rotation(f32),
-}
-
-#[derive(Message)]
-struct CharacterMovement {
-    entity: Entity,
-    movement_type: MovementType,
-}
-
-impl CharacterMovement {
-    fn translation(entity: Entity, velocity: Vec2) -> Self {
-        Self {
-            entity,
-            movement_type: MovementType::Translation(velocity),
-        }
-    }
-
-    fn rotation(entity: Entity, angle: f32) -> Self {
-        Self {
-            entity,
-            movement_type: MovementType::Rotation(angle),
-        }
-    }
-}
-
-struct CharacterControllerPlugin;
-
-impl Plugin for CharacterControllerPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_message::<CharacterMovement>()
-            .add_systems(FixedUpdate, character_movement);
-    }
-}
-
-fn character_movement(
-    mut characters: Query<(&mut LinearVelocity, &mut AngularVelocity), With<Character>>,
-    mut character_movements: MessageReader<CharacterMovement>,
-) {
-    for message in character_movements.read() {
-        let (mut linear_velocity, mut angular_velocity) =
-            characters.get_mut(message.entity).expect(&format!(
-                "character movement message sent for non-existent entity.\nID: {}",
-                message.entity
-            ));
-
-        match message.movement_type {
-            MovementType::Translation(velocity) => {
-                **linear_velocity = velocity;
-            }
-            MovementType::Rotation(angle) => **angular_velocity = angle,
-        }
-    }
-}
-
-struct GameDebugPlugins;
-
-impl PluginGroup for GameDebugPlugins {
-    fn build(self) -> PluginGroupBuilder {
-        PluginGroupBuilder::start::<Self>()
-            .add(SystemDebugPlugin)
-            .add(GizmoDebugPlugin)
-    }
-}
-
-struct SystemDebugPlugin;
-
-impl Plugin for SystemDebugPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(Update, exit_on_esc);
-    }
-}
-
-fn exit_on_esc(keyboard: Res<ButtonInput<KeyCode>>, mut app_exit: MessageWriter<AppExit>) {
-    if keyboard.just_pressed(KeyCode::Escape) {
-        app_exit.write(AppExit::Success);
-    }
-}
-
-struct GizmoDebugPlugin;
-
-impl Plugin for GizmoDebugPlugin {
-    fn build(&self, app: &mut App) {
-        app.insert_resource(DebugGridDimensions {
-            spacing: 100.0,
-            rows: 15,
-            cols: 15,
-            point_radius: 5.0,
-        })
-        .add_systems(Update, draw_debug_grid);
-    }
-}
-
-#[derive(Resource)]
-struct DebugGridDimensions {
-    spacing: f32,
-    rows: u32,
-    cols: u32,
-    point_radius: f32,
-}
-
-fn draw_debug_grid(debug_grid: Res<DebugGridDimensions>, mut gizmos: Gizmos) {
-    let horizontal_offset = (debug_grid.cols - 1) as f32 * debug_grid.spacing / 2.0;
-    let vertical_offset = (debug_grid.rows - 1) as f32 * debug_grid.spacing / 2.0;
-
-    for row in 0..debug_grid.rows {
-        for col in 0..debug_grid.cols {
-            let position = vec2(
-                col as f32 * debug_grid.spacing - horizontal_offset,
-                row as f32 * debug_grid.spacing - vertical_offset,
-            );
-            gizmos.circle_2d(
-                position,
-                debug_grid.point_radius,
-                Color::srgb(0.9, 0.4, 0.2),
-            );
-        }
-    }
 }
