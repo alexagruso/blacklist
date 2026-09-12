@@ -1,4 +1,11 @@
-use bevy::{app::PluginGroupBuilder, prelude::*};
+use bevy::{
+    app::PluginGroupBuilder,
+    camera::Projection::Orthographic,
+    input::mouse::{MouseScrollUnit, MouseWheel},
+    prelude::*,
+};
+
+use crate::MainCamera;
 
 pub struct GameDebugPlugins;
 
@@ -7,6 +14,7 @@ impl PluginGroup for GameDebugPlugins {
         PluginGroupBuilder::start::<Self>()
             .add(SystemDebugPlugin)
             .add(GizmoDebugPlugin)
+            .add(WorldDebugPlugin)
     }
 }
 
@@ -61,6 +69,44 @@ fn draw_debug_grid(debug_grid: Res<DebugGridDimensions>, mut gizmos: Gizmos) {
                 debug_grid.point_radius,
                 Color::srgb(0.9, 0.4, 0.2),
             );
+        }
+    }
+}
+
+struct WorldDebugPlugin;
+
+impl Plugin for WorldDebugPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, camera_zoom_scroll)
+            .init_resource::<CameraZoomConfig>();
+    }
+}
+
+#[derive(Resource)]
+struct CameraZoomConfig {
+    sensitivity: f32,
+}
+
+impl Default for CameraZoomConfig {
+    fn default() -> Self {
+        Self { sensitivity: 0.015 }
+    }
+}
+
+fn camera_zoom_scroll(
+    camera_zoom_config: Res<CameraZoomConfig>,
+    mut mouse_scroll: MessageReader<MouseWheel>,
+    mut camera_projection: Query<&mut Projection, With<MainCamera>>,
+) {
+    let mut projection = camera_projection
+        .single_mut()
+        .expect("There should always be an active camera");
+
+    for scroll in mouse_scroll.read() {
+        if let MouseScrollUnit::Line = scroll.unit
+            && let Orthographic(projection) = &mut *projection
+        {
+            projection.scale -= scroll.y * camera_zoom_config.sensitivity;
         }
     }
 }
