@@ -77,7 +77,7 @@ struct WorldDebugPlugin;
 
 impl Plugin for WorldDebugPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, camera_zoom_scroll)
+        app.add_systems(Update, (camera_zoom_scroll, camera_move))
             .init_resource::<CameraZoomConfig>();
     }
 }
@@ -109,4 +109,33 @@ fn camera_zoom_scroll(
             projection.scale -= scroll.y * camera_zoom_config.sensitivity;
         }
     }
+}
+
+fn camera_move(
+    time: Res<Time>,
+    keyboard: Res<ButtonInput<KeyCode>>,
+    mut camera: Query<&mut Transform, With<MainCamera>>,
+) {
+    let mut camera_transform = camera
+        .single_mut()
+        .expect("There should always be an active camera");
+
+    const MOVEMENT_SPEED: f32 = 100.0;
+    let mut velocity = Vec2::ZERO;
+
+    if keyboard.pressed(KeyCode::KeyJ) {
+        velocity.x -= 1.0;
+    }
+    if keyboard.pressed(KeyCode::KeyL) {
+        velocity.x += 1.0;
+    }
+
+    if keyboard.pressed(KeyCode::KeyI) {
+        velocity.y += 1.0;
+    }
+    if keyboard.pressed(KeyCode::KeyK) {
+        velocity.y -= 1.0;
+    }
+
+    camera_transform.translation += velocity.extend(0.0) * MOVEMENT_SPEED * time.delta_secs();
 }

@@ -47,8 +47,8 @@ fn spawn_player(
         Player::default(),
         Character,
         RigidBody::Kinematic,
-        Collider::rectangle(50.0, 50.0),
-        Mesh2d(meshes.add(Rectangle::new(50.0, 50.0))),
+        Collider::capsule(25.0, 50.0),
+        Mesh2d(meshes.add(Capsule2d::new(25.0, 50.0))),
         MeshMaterial2d(materials.add(Color::srgb(0.25, 0.9, 0.35))),
     ));
 }
