@@ -1,9 +1,9 @@
 use avian2d::prelude::*;
-use bevy::{math::InvalidDirectionError, prelude::*};
+use bevy::prelude::*;
 
 /// Marker for any entity that responds to character controller messages
 #[derive(Component)]
-#[require(Transform, LinearVelocity, AngularVelocity)]
+#[require(Position, Rotation, CustomPositionIntegration)]
 pub struct Character;
 
 pub enum MovementType {
@@ -63,35 +63,48 @@ fn character_movement(
 }
 
 fn character_collision_response(
-    spatial_query: SpatialQuery,
-    characters: Query<(Entity, &Collider, &Transform), With<Character>>,
-    mut gizmos: Gizmos,
+    time: Res<Time<Fixed>>,
+    move_and_slide: MoveAndSlide,
+    mut characters: Query<
+        (
+            Entity,
+            &Collider,
+            &Position,
+            &Rotation,
+            &LinearVelocity,
+            &AngularVelocity,
+        ),
+        With<Character>,
+    >,
+    mut commands: Commands,
 ) {
-    const GRID_RADIUS: i32 = 3;
-    const GRID_SPACING: f32 = 15.0;
-
-    for (entity, collider, transform) in &characters {
-        let position = transform.translation.xy();
-        for col in -GRID_RADIUS..=GRID_RADIUS {
-            for row in -GRID_RADIUS..=GRID_RADIUS {
-                let point = position
-                    + vec2(col as f32 * GRID_SPACING, row as f32 * GRID_SPACING).rotate(
-                        Vec2::from_angle(transform.rotation.to_euler(EulerRot::XYZ).2),
-                    );
-                let color = if !spatial_query
-                    .point_intersections(
-                        point,
-                        &SpatialQueryFilter::from_excluded_entities([entity]),
-                    )
-                    .is_empty()
-                {
-                    Color::srgb(0.0, 1.0, 0.0)
-                } else {
-                    Color::srgb(1.0, 0.0, 0.0)
-                };
-
-                gizmos.circle_2d(point, 2.0, color);
-            }
+    for (entity, collider, position, rotation, linear_velocity, angular_velocity) in &mut characters
+    {
+        let velocity = **linear_velocity;
+        if !velocity.is_finite() {
+            panic!("Entity {entity} has infinite or NaN velocity");
         }
+
+        if velocity != Vec2::ZERO {
+            let output = move_and_slide.move_and_slide(
+                &collider,
+                position.0,
+                rotation.as_radians(),
+                velocity,
+                time.delta(),
+                &MoveAndSlideConfig::default(),
+                &SpatialQueryFilter::from_excluded_entities([entity]),
+                |_hit| MoveAndSlideHitResponse::Accept,
+            );
+
+            commands.entity(entity).insert((
+                Position(output.position),
+                LinearVelocity(output.projected_velocity),
+            ));
+        }
+
+        let new_rotation =
+            Rotation::radians(rotation.as_radians() + **angular_velocity * time.delta_secs());
+        commands.entity(entity).insert(new_rotation);
     }
 }
