@@ -1,6 +1,7 @@
+use avian2d::prelude::*;
 use bevy::prelude::*;
 
-use crate::character::CharacterMovement;
+use crate::character::{Character, CharacterMovement};
 
 #[derive(Component)]
 pub struct Player {
@@ -17,12 +18,43 @@ impl Default for Player {
     }
 }
 
+#[derive(Resource)]
+pub struct PlayerAssets {
+    mesh: Handle<Mesh>,
+    material: Handle<ColorMaterial>,
+}
+
+impl PlayerAssets {
+    pub fn into_bundle(&self) -> impl Bundle {
+        (
+            Player::default(),
+            Character,
+            RigidBody::Kinematic,
+            Collider::capsule(25.0, 50.0),
+            Mesh2d(self.mesh.clone()),
+            MeshMaterial2d(self.material.clone()),
+        )
+    }
+}
+
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PreUpdate, player_input);
+        app.add_systems(PreStartup, player_setup)
+            .add_systems(PreUpdate, player_input);
     }
+}
+
+fn player_setup(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    commands.insert_resource(PlayerAssets {
+        mesh: meshes.add(Capsule2d::new(25.0, 50.0)),
+        material: materials.add(Color::srgb(0.25, 0.9, 0.35)),
+    });
 }
 
 fn player_input(
