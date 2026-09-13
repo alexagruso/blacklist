@@ -1,7 +1,10 @@
 use avian2d::prelude::*;
-use bevy::prelude::*;
+use bevy::{prelude::*, window::PrimaryWindow};
 
-use crate::character::{Character, CharacterMovement};
+use crate::{
+    MainCamera,
+    character::{Character, CharacterMovement},
+};
 
 #[derive(Component)]
 pub struct Player {
@@ -42,7 +45,7 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(PreStartup, player_setup)
-            .add_systems(PreUpdate, player_input);
+            .add_systems(PreUpdate, (player_keyboard_input, player_mouse_rotation));
     }
 }
 
@@ -57,7 +60,7 @@ fn player_setup(
     });
 }
 
-fn player_input(
+fn player_keyboard_input(
     keyboard: Res<ButtonInput<KeyCode>>,
     player: Query<(&Player, Entity)>,
     mut character_movements: MessageWriter<CharacterMovement>,
@@ -66,7 +69,6 @@ fn player_input(
         .single()
         .expect("there should never be multiple player entities");
     let mut velocity = Vec2::ZERO;
-    let mut angle: f32 = 0.0;
 
     if keyboard.pressed(KeyCode::KeyA) {
         velocity.x -= 1.0;
@@ -85,14 +87,26 @@ fn player_input(
     let velocity =
         vec2(velocity.x as f32, velocity.y as f32).normalize_or_zero() * player.movement_speed;
     character_movements.write(CharacterMovement::translation(player_entity, velocity));
+}
 
-    if keyboard.pressed(KeyCode::KeyQ) {
-        angle += 1.0;
-    }
-    if keyboard.pressed(KeyCode::KeyE) {
-        angle -= 1.0;
-    }
+fn player_mouse_rotation(
+    camera: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
+    window: Single<&Window, With<PrimaryWindow>>,
+    player: Single<(&Transform, &mut Rotation), With<Player>>,
+) {
+    let cursor_position = match window.cursor_position() {
+        Some(position) => position,
+        None => return,
+    };
 
-    let angle = angle.to_radians() * player.rotation_speed;
-    character_movements.write(CharacterMovement::rotation(player_entity, angle));
+    let (camera, camera_transform) = camera.into_inner();
+    let cursor_position = match camera.viewport_to_world_2d(camera_transform, cursor_position) {
+        Ok(position) => position,
+        _ => return,
+    };
+
+    let (player_transform, mut player_rotation) = player.into_inner();
+    let cursor_direction = cursor_position - player_transform.translation.xy();
+    let cursor_angle = cursor_direction.y.atan2(cursor_direction.x);
+    *player_rotation = Rotation::radians(cursor_angle);
 }
