@@ -7,8 +7,8 @@ use bevy::prelude::*;
 pub struct Character;
 
 pub enum MovementType {
-    Translation(Vec2),
-    Rotation(f32),
+    LinearVelocity(Vec2),
+    AngularVelocity(f32),
 }
 
 #[derive(Message)]
@@ -18,17 +18,17 @@ pub struct CharacterMovement {
 }
 
 impl CharacterMovement {
-    pub fn translation(entity: Entity, offset: Vec2) -> Self {
+    pub fn linear_velocity(entity: Entity, offset: Vec2) -> Self {
         Self {
             entity,
-            movement_type: MovementType::Translation(offset),
+            movement_type: MovementType::LinearVelocity(offset),
         }
     }
 
-    pub fn rotation(entity: Entity, angle: f32) -> Self {
+    pub fn angular_velocity(entity: Entity, angle: f32) -> Self {
         Self {
             entity,
-            movement_type: MovementType::Rotation(angle),
+            movement_type: MovementType::AngularVelocity(angle),
         }
     }
 }
@@ -56,15 +56,43 @@ fn character_movement(
             ));
 
         match message.movement_type {
-            MovementType::Translation(offset) => **linear_velocity = offset,
-            MovementType::Rotation(angle) => **angular_velocity = angle,
+            MovementType::LinearVelocity(offset) => **linear_velocity = offset,
+            MovementType::AngularVelocity(angle) => **angular_velocity = angle,
         }
     }
 }
 
+// fn rotate_shape_cast(
+//     collider: &Collider,
+//     position: Vec2,
+//     rotation: f32,
+//     angular_velocity: f32,
+//     // _rotate_shape_cast_config: RotateShapeCastConfig,
+//     spatial_query: &SpatialQuery,
+//     filter: &SpatialQueryFilter,
+// ) -> f32 {
+//     let mut start = rotation;
+//     let mut offset = angular_velocity;
+//     const MAX_ITERATIONS: u32 = 20;
+
+//     for _ in 0..MAX_ITERATIONS {
+//         if !spatial_query
+//             .shape_intersections(&collider, position, start + offset, filter)
+//             .is_empty()
+//         {
+//             offset = (start + offset) / 2.0;
+//         } else {
+//             start = (start + offset) / 2.0;
+//         }
+//     }
+
+//     offset
+// }
+
 fn character_collision_response(
     time: Res<Time<Fixed>>,
     move_and_slide: MoveAndSlide,
+    _spatial_query: SpatialQuery,
     mut characters: Query<
         (
             Entity,
@@ -78,33 +106,45 @@ fn character_collision_response(
     >,
     mut commands: Commands,
 ) {
-    for (entity, collider, position, rotation, linear_velocity, angular_velocity) in &mut characters
+    for (entity, collider, position, rotation, linear_velocity, _angular_velocity) in
+        &mut characters
     {
         let velocity = **linear_velocity;
         if !velocity.is_finite() {
             panic!("Entity {entity} has infinite or NaN velocity");
         }
 
-        if velocity != Vec2::ZERO {
-            let output = move_and_slide.move_and_slide(
-                &collider,
-                position.0,
-                rotation.as_radians(),
-                velocity,
-                time.delta(),
-                &MoveAndSlideConfig::default(),
-                &SpatialQueryFilter::from_excluded_entities([entity]),
-                |_hit| MoveAndSlideHitResponse::Accept,
-            );
+        let output = move_and_slide.move_and_slide(
+            &collider,
+            position.0,
+            rotation.as_radians(),
+            velocity,
+            time.delta(),
+            &MoveAndSlideConfig::default(),
+            &SpatialQueryFilter::from_excluded_entities([entity]),
+            |_hit| MoveAndSlideHitResponse::Accept,
+        );
 
-            commands.entity(entity).insert((
-                Position(output.position),
-                LinearVelocity(output.projected_velocity),
-            ));
-        }
+        // Overwriting the component avoids having to mutably borrow in the character query
+        commands.entity(entity).insert((
+            Position(output.position),
+            LinearVelocity(output.projected_velocity),
+        ));
 
-        let new_rotation =
-            Rotation::radians(rotation.as_radians() + **angular_velocity * time.delta_secs());
-        commands.entity(entity).insert(new_rotation);
+        // TODO: implement in place rotation collision
+        // if **angular_velocity != 0.0 {
+        //     let max_angle = rotate_shape_cast(
+        //         &collider,
+        //         **position,
+        //         rotation.as_radians(),
+        //         **angular_velocity,
+        //         &spatial_query,
+        //         &SpatialQueryFilter::from_excluded_entities([entity]),
+        //     );
+
+        //     let new_rotation =
+        //         Rotation::radians(rotation.as_radians() + max_angle * time.delta_secs());
+        //     commands.entity(entity).insert(new_rotation);
+        // }
     }
 }

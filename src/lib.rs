@@ -46,4 +46,16 @@ fn spawn_player(player_assets: Res<PlayerAssets>, mut commands: Commands) {
 
 fn spawn_obstacles(obstacle_assets: Res<ObstacleAssets>, mut commands: Commands) {
     commands.spawn(obstacle_assets.into_bundle(vec2(250.0, 0.0), vec2(100.0, 500.0), 15.0));
+    commands.spawn(obstacle_assets.into_bundle(vec2(-250.0, 0.0), vec2(100.0, 500.0), -15.0));
+
+    for i in 0..10 {
+        commands.spawn(obstacle_assets.into_bundle(
+            vec2(0.0, 100.0 + i as f32 * 25.0),
+            vec2(250.0, 10.0),
+            i as f32 * 18.0,
+        ));
+    }
+
+    commands.spawn(obstacle_assets.into_bundle(vec2(-50.0, -100.0), vec2(20.0, 100.0), 0.0));
+    commands.spawn(obstacle_assets.into_bundle(vec2(50.0, -100.0), vec2(20.0, 100.0), 0.0));
 }

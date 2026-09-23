@@ -45,7 +45,8 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(PreStartup, player_setup)
-            .add_systems(PreUpdate, (player_keyboard_input, player_mouse_rotation));
+            .add_systems(PreUpdate, (player_keyboard_input, player_mouse_rotation))
+            .add_systems(Update, player_camera);
     }
 }
 
@@ -86,13 +87,15 @@ fn player_keyboard_input(
 
     let velocity =
         vec2(velocity.x as f32, velocity.y as f32).normalize_or_zero() * player.movement_speed;
-    character_movements.write(CharacterMovement::translation(player_entity, velocity));
+    character_movements.write(CharacterMovement::linear_velocity(player_entity, velocity));
 }
 
 fn player_mouse_rotation(
     camera: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
     window: Single<&Window, With<PrimaryWindow>>,
     player: Single<(&Transform, &mut Rotation), With<Player>>,
+    // TODO: make this write a movement message
+    // mut character_movements: MessageWriter<CharacterMovement>,
 ) {
     let cursor_position = match window.cursor_position() {
         Some(position) => position,
@@ -109,4 +112,13 @@ fn player_mouse_rotation(
     let cursor_direction = cursor_position - player_transform.translation.xy();
     let cursor_angle = cursor_direction.y.atan2(cursor_direction.x);
     *player_rotation = Rotation::radians(cursor_angle);
+}
+
+fn player_camera(
+    player: Single<&Transform, With<Player>>,
+    camera: Single<&mut Transform, (With<MainCamera>, Without<Player>)>,
+) {
+    let player_transform = player.into_inner();
+    let mut camera_transform = camera.into_inner();
+    camera_transform.translation = player_transform.translation;
 }
