@@ -1,10 +1,11 @@
 use avian2d::prelude::*;
-use bevy::{prelude::*, window::PrimaryWindow};
+use bevy::prelude::*;
 
 use crate::{
     MainCamera,
     character::{Character, CharacterMovement},
     player::aiming::{Aiming, AimingPlugin, AimingZoomConfig},
+    precompute::CursorWorldPosition,
 };
 
 pub mod aiming;
@@ -97,21 +98,13 @@ fn player_keyboard_input(
 }
 
 fn player_mouse_rotation(
-    camera: Single<(&Camera, &GlobalTransform), With<MainCamera>>,
-    window: Single<&Window, With<PrimaryWindow>>,
+    cursor_world_position: Res<CursorWorldPosition>,
     player: Single<(&Transform, &mut Rotation), With<Player>>,
     // TODO: make this write a movement message
     // mut character_movements: MessageWriter<CharacterMovement>,
 ) {
-    // TODO: extract this into a general cursor world position
-    let cursor_position = match window.cursor_position() {
-        Some(position) => position,
-        None => return,
-    };
-    let (camera, camera_transform) = camera.into_inner();
-    let cursor_position = match camera.viewport_to_world_2d(camera_transform, cursor_position) {
-        Ok(position) => position,
-        _ => return,
+    let Some(cursor_position) = **cursor_world_position else {
+        return;
     };
 
     let (player_transform, mut player_rotation) = player.into_inner();
