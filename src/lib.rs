@@ -23,11 +23,14 @@ impl PluginGroup for GamePlugins {
     }
 }
 
+// TODO: find a home for all of this world generation code even if I have to label it debug
 struct SpawnPlugin;
 
 impl Plugin for SpawnPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, (spawn_camera, spawn_player, spawn_obstacles));
+
+        // NOTE: debug/testing stuff should be added here
     }
 }
 

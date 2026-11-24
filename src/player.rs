@@ -4,7 +4,10 @@ use bevy::{prelude::*, window::PrimaryWindow};
 use crate::{
     MainCamera,
     character::{Character, CharacterMovement},
+    player::aiming::{Aiming, AimingPlugin, AimingZoomConfig},
 };
+
+pub mod aiming;
 
 #[derive(Component)]
 pub struct Player {
@@ -47,6 +50,9 @@ impl Plugin for PlayerPlugin {
         app.add_systems(PreStartup, player_setup)
             .add_systems(PreUpdate, (player_keyboard_input, player_mouse_rotation))
             .add_systems(Update, player_camera);
+
+        app.init_resource::<AimingZoomConfig>();
+        app.add_plugins(AimingPlugin);
     }
 }
 
@@ -97,11 +103,11 @@ fn player_mouse_rotation(
     // TODO: make this write a movement message
     // mut character_movements: MessageWriter<CharacterMovement>,
 ) {
+    // TODO: extract this into a general cursor world position
     let cursor_position = match window.cursor_position() {
         Some(position) => position,
         None => return,
     };
-
     let (camera, camera_transform) = camera.into_inner();
     let cursor_position = match camera.viewport_to_world_2d(camera_transform, cursor_position) {
         Ok(position) => position,
@@ -114,11 +120,33 @@ fn player_mouse_rotation(
     *player_rotation = Rotation::radians(cursor_angle);
 }
 
+/// Performs the following modifications to the camera:
+///
+/// - Copies the player's translation to the camera's translation
+/// - Applies the aiming effect if the player is aiming
 fn player_camera(
-    player: Single<&Transform, With<Player>>,
-    camera: Single<&mut Transform, (With<MainCamera>, Without<Player>)>,
+    zoom_config: Res<AimingZoomConfig>,
+    time: Res<Time>,
+    player: Single<(&Transform, Has<Aiming>), With<Player>>,
+    camera: Single<(&mut Transform, &mut Projection), (With<MainCamera>, Without<Player>)>,
 ) {
-    let player_transform = player.into_inner();
-    let mut camera_transform = camera.into_inner();
+    let (player_transform, is_aiming) = player.into_inner();
+    let (mut camera_transform, mut projection) = camera.into_inner();
+
     camera_transform.translation = player_transform.translation;
+
+    let Projection::Orthographic(projection) = projection.as_mut() else {
+        return;
+    };
+    let current_scale = projection.scale;
+    let delta = time.delta_secs();
+    if is_aiming {
+        projection.scale = (current_scale
+            - delta * (1.0 / zoom_config.in_time_secs) * zoom_config.scale_modifier)
+            .max(1.0 - zoom_config.scale_modifier);
+    } else {
+        projection.scale = (current_scale
+            + delta * (1.0 / zoom_config.out_time_secs) * zoom_config.scale_modifier)
+            .min(1.0);
+    }
 }
