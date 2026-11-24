@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-avian2d = "0.7.0"
-bevy = { version = "0.19.0", features = ["debug", "dynamic_linking"] }
+avian2d = "0.8.0"
+bevy = { version = "0.20.0", features = ["debug", "dynamic_linking"] }
 
 [profile.dev]
 opt-level = 1
